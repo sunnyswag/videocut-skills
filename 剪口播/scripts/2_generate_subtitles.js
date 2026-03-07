@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * 在 volcengine_result 上做 opt 与 gap 插入，输出 volcengine_result_opted.json
+ * 在 volcengine_result 上做 opt 与 gap 插入，输出 common/subtitles_words.json
  *
  * - 删除所有 "attribute": { "event": "speech" }（保留根 attribute.extra）
  * - 为每个 utterance、每个 word 添加 opt: "keep"
- * - 在相邻两项时间间隔 > 100ms 处插入 gap 节点 { opt: "del", start_time, end_time, text: "" }
+ * - 在相邻两项时间间隔 > 100ms 处插入 gap 节点 { opt: "blank", start_time, end_time }
  *
  * 用法: node generate_subtitles.js <volcengine_result.json>
- * 输出: volcengine_result_opted.json（与输入同目录）
+ * 输出: common/subtitles_words.json（与 1_转录 同级的 common 目录）
  */
 
 const fs = require('fs');
@@ -29,22 +29,43 @@ function makeGapNode(startTime, endTime) {
   return { opt: 'blank', start_time: startTime, end_time: endTime };
 }
 
-function processEachItem(cur, preEndTime) {
-  removeSpeechAttribute(cur);
-  cur.opt = 'keep';
-
-  const currStart = typeof cur.start_time === 'number' ? cur.start_time : preEndTime;
-  const gapMs = currStart - preEndTime;
-  return gapMs > GAP_MS ? makeGapNode(preEndTime, currStart) : undefined;
+function isEmptyNode(item) {
+  const text = (item.text != null ? String(item.text) : '').trim();
+  const start = typeof item.start_time === 'number' ? item.start_time : 0;
+  const end = typeof item.end_time === 'number' ? item.end_time : start;
+  return start === end && !text;
 }
 
-function loopItems(items, parent = null) {
+function editNode(cur) {
+  removeSpeechAttribute(cur);
+  cur.opt = 'keep';
+}
+
+function produceGapNode(cur, preEndTime) {
+  const currStart = typeof cur.start_time === 'number' ? cur.start_time : preEndTime;
+  const gapMs = currStart - preEndTime;
+  return gapMs > GAP_MS ? makeGapNode(preEndTime, currStart) : null;
+}
+
+function loopItems(items, parentStartTime = 0) {
   if (!Array.isArray(items)) return;
-  for (let i = 0; i < items.length; i++) {
-    const preEndTime = i > 0 ? items[i - 1].end_time : (parent ? parent.start_time : 0);
-    const gap = processEachItem(items[i], preEndTime);
-    if (gap) items.splice(i, 0, gap);
-  }  
+  let i = 0;
+  while (i < items.length) {
+    if (isEmptyNode(items[i])) {
+      items.splice(i, 1);
+      continue;
+    }
+    editNode(items[i]);
+
+    const preEndTime = i > 0 ? items[i - 1].end_time : parentStartTime;
+    const gap = produceGapNode(items[i], preEndTime);
+    if (gap) {
+      items.splice(i, 0, gap);
+      i++;
+    }
+    loopItems(items[i].words, items[i].start_time);
+    i++;
+  }
 }
 
 if (!fs.existsSync(sourceFile)) {
@@ -54,18 +75,14 @@ if (!fs.existsSync(sourceFile)) {
 
 const source = JSON.parse(fs.readFileSync(sourceFile, 'utf8'));
 
-const utterances = source.utterances;
-if (!Array.isArray(utterances)) {
+if (!Array.isArray(source.utterances)) {
   console.error('❌ 缺少 utterances 数组');
   process.exit(1);
 }
 
-loopItems(utterances);
-utterances.forEach(u => {
-  if (u.opt !== 'del') loopItems(u.words, u);
-});
+loopItems(source.utterances);
 
 const outDir = path.dirname(path.dirname(path.resolve(sourceFile)));
 const outFile = path.join(outDir, "common", "subtitles_words.json");
-fs.writeFileSync(outFile, JSON.stringify(utterances, null, 2), 'utf8');
+fs.writeFileSync(outFile, JSON.stringify(source.utterances, null, 2), 'utf8');
 console.log('✅ 已保存', outFile);

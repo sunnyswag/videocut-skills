@@ -8,9 +8,6 @@ input: 用户反馈、错误纠正
 output: 更新后的文档（CLAUDE.md 或 tips/*.md）
 pos: 元 skill，让 Agent 从错误中学习
 
-架构守护者：一旦我被修改，请同步更新：
-1. ../README.md 的 Skill 清单
-2. /CLAUDE.md 路由表
 -->
 
 # 自更新

@@ -8,9 +8,6 @@ input: 无
 output: 环境就绪
 pos: 前置 skill，首次使用前运行
 
-架构守护者：一旦我被修改，请同步更新：
-1. ../README.md 的 Skill 清单
-2. /CLAUDE.md 路由表
 -->
 
 # 安装

@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>审核稿</title>
+  <script src="https://unpkg.com/wavesurfer.js@7"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    h1 { text-align: center; margin-bottom: 20px; }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #333;
+    }
+    .tab {
+      padding: 8px 14px;
+      background: #333;
+      color: #ccc;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .tab:hover { background: #444; color: #fff; }
+    .tab.active { background: #1976D2; color: #fff; }
+
+    .controls {
+      position: sticky;
+      top: 0;
+      background: #1a1a1a;
+      padding: 15px 0;
+      border-bottom: 1px solid #333;
+      z-index: 100;
+    }
+
+    .buttons {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+    }
+
+    button {
+      padding: 8px 16px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover { background: #45a049; }
+    button.danger { background: #f44336; }
+    button.danger:hover { background: #da190b; }
+
+    select {
+      padding: 8px 12px;
+      background: #333;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    select:hover { background: #444; }
+
+    #time {
+      font-family: monospace;
+      font-size: 16px;
+      color: #888;
+    }
+
+    #waveform {
+      background: #252525;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+
+    .content {
+      line-height: 2.5;
+      padding: 20px 0;
+    }
+
+    .word {
+      display: inline-block;
+      padding: 4px 2px;
+      margin: 2px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .word:hover { background: #333; }
+    .word.current { background: #2196F3; color: white; }
+    .word.selected { background: #f44336; color: white; text-decoration: line-through; }
+    .word.ai-selected { background: #ff9800; color: white; }
+    .word.ai-selected.selected { background: #f44336; }
+
+    .gap {
+      display: inline-block;
+      background: #333;
+      color: #888;
+      padding: 4px 8px;
+      margin: 2px;
+      border-radius: 3px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .gap:hover { background: #444; }
+    .gap.selected { background: #f44336; color: white; }
+    .gap.ai-selected { background: #ff9800; color: white; }
+    .gap.ai-selected.selected { background: #f44336; }
+
+    .stats {
+      margin-top: 10px;
+      padding: 10px;
+      background: #252525;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .help {
+      font-size: 13px;
+      color: #999;
+      margin-top: 10px;
+      background: #252525;
+      padding: 12px;
+      border-radius: 6px;
+      line-height: 1.8;
+    }
+    .help b { color: #fff; }
+    .help div { margin: 2px 0; }
+
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+    }
+    .loading-overlay.show { display: flex; }
+    .loading-spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid #333;
+      border-top-color: #9C27B0;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { margin-top: 20px; font-size: 18px; color: #fff; }
+    .loading-progress-container { margin-top: 20px; width: 300px; height: 8px; background: #333; border-radius: 4px; overflow: hidden; }
+    .loading-progress-bar { height: 100%; background: linear-gradient(90deg, #9C27B0, #E91E63); width: 0%; transition: width 0.3s ease; }
+    .loading-time { margin-top: 15px; font-size: 14px; color: #888; }
+    .loading-estimate { margin-top: 8px; font-size: 13px; color: #666; }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">🎬 正在剪辑中...</div>
+    <div class="loading-progress-container">
+      <div class="loading-progress-bar" id="loadingProgress"></div>
+    </div>
+    <div class="loading-time" id="loadingTime">已等待 0 秒</div>
+    <div class="loading-estimate" id="loadingEstimate">预估剩余: 计算中...</div>
+  </div>
+
+  <h1>审核稿</h1>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div class="controls">
+    <div class="buttons">
+      <button id="btnPlay">▶️ 播放/暂停</button>
+      <select id="speed">
+        <option value="0.5">0.5x</option>
+        <option value="0.75">0.75x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.25">1.25x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+      </select>
+      <button id="btnCopy">📋 复制删除列表</button>
+      <button id="btnCut" style="background:#9C27B0">🎬 执行剪辑</button>
+      <button class="danger" id="btnClear">🗑️ 清空选择</button>
+      <span id="time">00:00 / 00:00</span>
+    </div>
+    <div id="waveform"></div>
+    <div class="help">
+      <div><b>🖱️ 鼠标：</b>单击 = 跳转播放 | 双击 = 选中/取消 | Shift+拖动 = 批量选中/取消</div>
+      <div><b>⌨️ 键盘：</b>空格 = 播放/暂停 | ← → = 跳转1秒 | Shift+←→ = 跳转5秒</div>
+      <div><b>🎨 颜色：</b><span style="color:#ff9800">橙色</span> = AI预选 | <span style="color:#f44336">红色删除线</span> = 已确认删除 | 播放时自动跳过选中片段</div>
+    </div>
+  </div>
+
+  <div class="content" id="content"></div>
+  <div class="stats" id="stats"></div>
+
+  <script>
+    let projects = [];
+    let currentProjectId = null;
+    const stateByProject = {};
+    let wavesurfer = null;
+    const timeDisplay = document.getElementById('time');
+    const content = document.getElementById('content');
+    const statsDiv = document.getElementById('stats');
+    let elements = [];
+    let isSelecting = false;
+    let selectStart = -1;
+    let selectMode = 'add';
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    function formatDuration(sec) {
+      const totalSec = parseFloat(sec);
+      const m = Math.floor(totalSec / 60);
+      const s = (totalSec % 60).toFixed(1);
+      if (m > 0) return `${m}分${s}秒 (${totalSec}s)`;
+      return `${s}秒`;
+    }
+
+    function getCurrentState() {
+      if (!currentProjectId || !stateByProject[currentProjectId]) return null;
+      return stateByProject[currentProjectId];
+    }
+
+    function render() {
+      const state = getCurrentState();
+      if (!state) return;
+      const { words, autoSelected, selected } = state;
+      content.innerHTML = '';
+      elements = [];
+
+      words.forEach((word, i) => {
+        const isGap = word.opt === 'del';
+        const div = document.createElement('div');
+        div.className = isGap ? 'gap' : 'word';
+        if (selected.has(i)) div.classList.add('selected');
+        else if (autoSelected.has(i)) div.classList.add('ai-selected');
+        if (isGap) {
+          const duration = (word.end - word.start).toFixed(1);
+          div.textContent = `⏸ ${duration}s`;
+        } else {
+          div.textContent = word.text;
+        }
+        div.dataset.index = i;
+        div.onclick = (e) => {
+          if (!isSelecting && wavesurfer) wavesurfer.setTime(word.start);
+        };
+        div.ondblclick = () => toggle(i);
+        div.onmousedown = (e) => {
+          if (e.shiftKey) {
+            isSelecting = true;
+            selectStart = i;
+            selectMode = selected.has(i) ? 'remove' : 'add';
+            e.preventDefault();
+          }
+        };
+        content.appendChild(div);
+        elements.push(div);
+      });
+      updateStats();
+    }
+
+    content.addEventListener('mousemove', (e) => {
+      if (!isSelecting) return;
+      const target = e.target.closest('[data-index]');
+      if (!target) return;
+      const state = getCurrentState();
+      if (!state) return;
+      const { selected } = state;
+      const i = parseInt(target.dataset.index);
+      const min = Math.min(selectStart, i);
+      const max = Math.max(selectStart, i);
+      for (let j = min; j <= max; j++) {
+        if (selectMode === 'add') {
+          selected.add(j);
+          elements[j].classList.add('selected');
+          elements[j].classList.remove('ai-selected');
+        } else {
+          selected.delete(j);
+          elements[j].classList.remove('selected');
+          if (state.autoSelected.has(j)) elements[j].classList.add('ai-selected');
+        }
+      }
+      updateStats();
+    });
+
+    document.addEventListener('mouseup', () => { isSelecting = false; });
+
+    function toggle(i) {
+      const state = getCurrentState();
+      if (!state) return;
+      const { selected, autoSelected } = state;
+      if (selected.has(i)) {
+        selected.delete(i);
+        elements[i].classList.remove('selected');
+        if (autoSelected.has(i)) elements[i].classList.add('ai-selected');
+      } else {
+        selected.add(i);
+        elements[i].classList.add('selected');
+        elements[i].classList.remove('ai-selected');
+      }
+      updateStats();
+    }
+
+    function updateStats() {
+      const state = getCurrentState();
+      if (!state) {
+        statsDiv.textContent = '';
+        return;
+      }
+      const { words, selected } = state;
+      let totalDuration = 0;
+      selected.forEach(i => { totalDuration += words[i].end - words[i].start; });
+      statsDiv.textContent = `已选择 ${selected.size} 个元素，总时长 ${totalDuration.toFixed(2)}s`;
+    }
+
+    function bindWavesurferEvents() {
+      if (!wavesurfer || !getCurrentState()) return;
+      const state = getCurrentState();
+      const { words, selected } = state;
+
+      wavesurfer.on('timeupdate', (t) => {
+        if (wavesurfer.isPlaying()) {
+          const sortedSelected = Array.from(selected).sort((a, b) => a - b);
+          for (const i of sortedSelected) {
+            const w = words[i];
+            if (t >= w.start && t < w.end) {
+              let endTime = w.end;
+              let j = sortedSelected.indexOf(i) + 1;
+              while (j < sortedSelected.length) {
+                const nextIdx = sortedSelected[j];
+                const nextW = words[nextIdx];
+                if (nextW.start - endTime < 0.1) {
+                  endTime = nextW.end;
+                  j++;
+                } else break;
+              }
+              wavesurfer.setTime(endTime);
+              return;
+            }
+          }
+        }
+        timeDisplay.textContent = `${formatTime(t)} / ${formatTime(wavesurfer.getDuration())}`;
+        elements.forEach((el, i) => {
+          const word = words[i];
+          if (t >= word.start && t < word.end) {
+            if (!el.classList.contains('current')) {
+              el.classList.add('current');
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          } else {
+            el.classList.remove('current');
+          }
+        });
+      });
+    }
+
+    function copyDeleteList() {
+      const state = getCurrentState();
+      if (!state) return;
+      const { words, selected } = state;
+      const sortedSelected = Array.from(selected).sort((a, b) => a - b);
+      const segments = sortedSelected.map(i => ({ start: words[i].start, end: words[i].end }));
+      const merged = [];
+      for (const seg of segments) {
+        if (merged.length === 0) merged.push({ ...seg });
+        else {
+          const last = merged[merged.length - 1];
+          if (Math.abs(seg.start - last.end) < 0.05) last.end = seg.end;
+          else merged.push({ ...seg });
+        }
+      }
+      navigator.clipboard.writeText(JSON.stringify(merged, null, 2)).then(() => {
+        alert('已复制 ' + merged.length + ' 个删除片段到剪贴板');
+      });
+    }
+
+    function clearAll() {
+      const state = getCurrentState();
+      if (!state) return;
+      const { selected, autoSelected } = state;
+      selected.clear();
+      elements.forEach((el, i) => {
+        el.classList.remove('selected');
+        if (autoSelected.has(i)) el.classList.add('ai-selected');
+      });
+      updateStats();
+    }
+
+    async function executeCut() {
+      const state = getCurrentState();
+      if (!state || !currentProjectId) return;
+      const { words, selected } = state;
+      const sortedSelected = Array.from(selected).sort((a, b) => a - b);
+      const segments = sortedSelected.map(i => ({ start: words[i].start, end: words[i].end }));
+
+      const duration = wavesurfer ? wavesurfer.getDuration() : 0;
+      const estimatedTime = Math.max(5, Math.ceil(duration / 4));
+      const estMin = Math.floor(estimatedTime / 60);
+      const estSec = estimatedTime % 60;
+      const estText = estMin > 0 ? `${estMin}分${estSec}秒` : `${estSec}秒`;
+
+      if (!confirm(`确认执行剪辑？\n\n📹 当前项目: ${currentProjectId}\n⏱️ 预计耗时: ${estText}\n\n点击确定开始`)) return;
+
+      const overlay = document.getElementById('loadingOverlay');
+      const loadingTimeEl = document.getElementById('loadingTime');
+      const loadingProgress = document.getElementById('loadingProgress');
+      const loadingEstimate = document.getElementById('loadingEstimate');
+      overlay.classList.add('show');
+      loadingEstimate.textContent = `预估剩余: ${estText}`;
+      const startTime = Date.now();
+      const timer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        loadingTimeEl.textContent = `已等待 ${elapsed} 秒`;
+        loadingProgress.style.width = Math.min(95, (elapsed / estimatedTime) * 100) + '%';
+        loadingEstimate.textContent = elapsed >= estimatedTime ? '即将完成...' : `预估剩余: ${Math.max(0, estimatedTime - elapsed)} 秒`;
+      }, 500);
+
+      try {
+        const res = await fetch('/api/cut/' + encodeURIComponent(currentProjectId), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(segments)
+        });
+        const data = await res.json();
+        clearInterval(timer);
+        loadingProgress.style.width = '100%';
+        await new Promise(r => setTimeout(r, 300));
+        overlay.classList.remove('show');
+        loadingProgress.style.width = '0%';
+        const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        if (data.success) {
+          alert(`✅ 剪辑完成！(耗时 ${totalTime}s)\n\n📁 输出: ${data.output}\n\n原时长: ${formatDuration(data.originalDuration)}\n新时长: ${formatDuration(data.newDuration)}\n删减: ${formatDuration(data.deletedDuration)} (${data.savedPercent}%)`);
+        } else {
+          alert('❌ 剪辑失败: ' + data.error);
+        }
+      } catch (err) {
+        clearInterval(timer);
+        overlay.classList.remove('show');
+        loadingProgress.style.width = '0%';
+        alert('❌ 请求失败: ' + err.message + '\n\n请确保使用 review_server.js 启动服务');
+      }
+    }
+
+    function switchProject(projectId) {
+      if (currentProjectId === projectId) return;
+      currentProjectId = projectId;
+      document.querySelectorAll('.tab').forEach(el => {
+        el.classList.toggle('active', el.dataset.id === projectId);
+      });
+      const state = stateByProject[projectId];
+      if (!state) return;
+      if (wavesurfer) {
+        wavesurfer.load('/api/audio/' + encodeURIComponent(projectId));
+        wavesurfer.unAll();
+      }
+      bindWavesurferEvents();
+      render();
+    }
+
+    async function loadProject(projectId) {
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return;
+      try {
+        const res = await fetch('/api/data/' + encodeURIComponent(projectId));
+        if (!res.ok) throw new Error(res.statusText);
+        const data = await res.json();
+        const words = data.words || [];
+        const autoSelected = new Set(Array.isArray(data.autoSelected) ? data.autoSelected : []);
+        const selected = new Set(autoSelected);
+        stateByProject[projectId] = { words, autoSelected, selected };
+        if (!currentProjectId) currentProjectId = projectId;
+        if (currentProjectId === projectId) {
+          if (wavesurfer) {
+            wavesurfer.load('/api/audio/' + encodeURIComponent(projectId));
+            wavesurfer.unAll();
+          }
+          bindWavesurferEvents();
+          render();
+        }
+      } catch (err) {
+        console.error('Load project failed:', err);
+        if (currentProjectId === projectId) {
+          content.innerHTML = '<div class="empty-state">加载失败: ' + err.message + '</div>';
+        }
+      }
+    }
+
+    async function init() {
+      try {
+        const res = await fetch('/api/projects');
+        if (!res.ok) throw new Error(res.statusText);
+        projects = await res.json();
+      } catch (err) {
+        document.getElementById('tabs').innerHTML = '<div class="empty-state">无法加载项目列表，请确保使用 review_server.js 启动并传入正确根路径。</div>';
+        content.innerHTML = '<div class="empty-state">' + err.message + '</div>';
+        return;
+      }
+
+      if (projects.length === 0) {
+        document.getElementById('tabs').innerHTML = '<div class="empty-state">暂无项目，请先运行剪口播流程生成数据。</div>';
+        return;
+      }
+
+      const tabsEl = document.getElementById('tabs');
+      tabsEl.innerHTML = '';
+      projects.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = 'tab';
+        btn.dataset.id = p.id;
+        btn.textContent = p.name;
+        btn.onclick = () => switchProject(p.id);
+        tabsEl.appendChild(btn);
+      });
+
+      if (!wavesurfer) {
+        wavesurfer = WaveSurfer.create({
+          container: '#waveform',
+          waveColor: '#4a9eff',
+          progressColor: '#1976D2',
+          cursorColor: '#fff',
+          height: 80,
+          barWidth: 2,
+          barGap: 1,
+          barRadius: 2
+        });
+        document.getElementById('btnPlay').onclick = () => wavesurfer.playPause();
+        document.getElementById('speed').onchange = (e) => wavesurfer.setPlaybackRate(parseFloat(e.target.value));
+        document.getElementById('btnCopy').onclick = copyDeleteList;
+        document.getElementById('btnCut').onclick = executeCut;
+        document.getElementById('btnClear').onclick = clearAll;
+        document.addEventListener('keydown', (e) => {
+          if (e.code === 'Space') { e.preventDefault(); wavesurfer.playPause(); }
+          else if (e.code === 'ArrowLeft') wavesurfer.setTime(Math.max(0, wavesurfer.getCurrentTime() - (e.shiftKey ? 5 : 1)));
+          else if (e.code === 'ArrowRight') wavesurfer.setTime(wavesurfer.getCurrentTime() + (e.shiftKey ? 5 : 1));
+        });
+      }
+
+      currentProjectId = projects[0].id;
+      document.querySelector('.tab').classList.add('active');
+
+      for (const p of projects) {
+        await loadProject(p.id);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

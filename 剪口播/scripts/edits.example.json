@@ -1,0 +1,13 @@
+{
+  "deletes": [
+    { "pathSet": { "parent": 0 }, "reason": "silence" },
+    { "pathSet": { "parent": 1, "children": [2, 3] }, "reason": "repetition", "reasonDetail": "相邻句子开头 ≥5 字相同" },
+    { "pathSet": { "parent": 2, "children": [3] }, "reason": "repetition", "reasonDetail": "相邻句子开头 ≥5 字相同" }
+  ],
+  "textChanges": [
+    { "pathSet": { "parent": 2, "children": [1] }, "newText": "C", "oldText": "c" }
+  ],
+  "combines": [
+    { "pathSet": { "parent": 16, "children": [5, 6] }, "newText": "GitHub", "oldText": "get up", "reason": "asr_error", "reasonDetail": "ASR 拆词错误" }
+  ]
+}

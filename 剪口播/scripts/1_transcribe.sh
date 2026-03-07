@@ -42,4 +42,4 @@ fi
 echo "✅ 音频 URL: $AUDIO_URL"
 
 # 3. 调用火山引擎 API
-./volcengine_transcribe.sh "$AUDIO_URL"
+./1_volcengine_transcribe.sh "$AUDIO_URL"
