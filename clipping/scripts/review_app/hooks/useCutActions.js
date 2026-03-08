@@ -3,9 +3,8 @@ import { formatDuration, mergeAdjacentSegments } from '../utils.js';
 import { buildEditsPayload } from '../edits.js';
 import { executeProjectCut } from '../api.js';
 
-export function useCutActions({ currentProjectId, currentState, duration }) {
+export function useCutActions({ currentProjectId, currentState, duration, burnSubtitle }) {
   const [loading, setLoading] = useState({ show: false, elapsed: 0, estimate: 0 });
-  const [burnSubtitle, setBurnSubtitle] = useState(false);
 
   const progressPercent = useMemo(
     () => (loading.estimate > 0 ? Math.min(95, (loading.elapsed / loading.estimate) * 100) : 0),
@@ -68,8 +67,6 @@ export function useCutActions({ currentProjectId, currentState, duration }) {
 
   return {
     loading,
-    burnSubtitle,
-    setBurnSubtitle,
     progressPercent,
     progressText,
     handleCopyDeleteList,

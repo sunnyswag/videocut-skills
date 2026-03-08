@@ -20,11 +20,13 @@ export function useReviewState() {
     currentProjectId: projectState.currentProjectId,
     currentState: projectState.currentState,
     setProjectState: projectState.setProjectState,
+    onSeekToTime: videoState.seekToTime,
   });
   const cutState = useCutActions({
     currentProjectId: projectState.currentProjectId,
     currentState: projectState.currentState,
     duration: videoState.duration,
+    burnSubtitle: projectState.burnSubtitle,
   });
 
   return {
@@ -40,7 +42,7 @@ export function useReviewState() {
     duration: videoState.duration,
     currentWordIndex: videoState.currentWordIndex,
     loading: cutState.loading,
-    burnSubtitle: cutState.burnSubtitle,
+    burnSubtitle: projectState.burnSubtitle,
     errorText: projectState.errorText,
     selectedDuration: projectState.selectedDuration,
     progressPercent: cutState.progressPercent,
@@ -49,7 +51,7 @@ export function useReviewState() {
     handlePlayPause: videoState.handlePlayPause,
     handleCopyDeleteList: cutState.handleCopyDeleteList,
     handleExecuteCut: cutState.handleExecuteCut,
-    setBurnSubtitle: cutState.setBurnSubtitle,
+    setBurnSubtitle: projectState.setBurnSubtitle,
     handleClearAll: selectionState.handleClearAll,
     handleWordClick: selectionState.handleWordClick,
     toggleWord: selectionState.toggleWord,

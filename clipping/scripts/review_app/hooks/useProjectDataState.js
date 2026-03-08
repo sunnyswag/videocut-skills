@@ -11,6 +11,7 @@ export function useProjectDataState() {
   const words = currentState?.words || [];
   const selected = currentState?.selected || new Set();
   const autoSelected = currentState?.autoSelected || new Set();
+  const burnSubtitle = Boolean(currentState?.burnSubtitle);
 
   const selectedDuration = useMemo(() => {
     let total = 0;
@@ -38,6 +39,7 @@ export function useProjectDataState() {
         words: projectWords,
         autoSelected: projectAutoSelected,
         selected: projectSelected,
+        burnSubtitle: false,
       },
     }));
   };
@@ -49,15 +51,21 @@ export function useProjectDataState() {
         setProjects(list);
         if (!list.length) return;
         setCurrentProjectId(list[0].id);
-        for (const p of list) {
-          // eslint-disable-next-line no-await-in-loop
-          await loadOneProject(p.id);
+        const results = await Promise.allSettled(list.map((p) => loadOneProject(p.id)));
+        const failedCount = results.filter((r) => r.status === 'rejected').length;
+        if (failedCount > 0) {
+          setErrorText(`部分项目加载失败（${failedCount}/${list.length}）`);
         }
       } catch (err) {
         setErrorText(err.message || String(err));
       }
     })();
   }, []);
+
+  const setBurnSubtitle = (value) => {
+    if (!currentProjectId) return;
+    setProjectState(currentProjectId, (state) => ({ ...state, burnSubtitle: Boolean(value) }));
+  };
 
   return {
     projects,
@@ -69,6 +77,8 @@ export function useProjectDataState() {
     words,
     selected,
     autoSelected,
+    burnSubtitle,
+    setBurnSubtitle,
     selectedDuration,
     errorText,
   };

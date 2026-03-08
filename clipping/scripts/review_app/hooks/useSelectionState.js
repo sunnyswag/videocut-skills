@@ -1,6 +1,6 @@
 import { useEffect, useRef } from '../preact.js';
 
-export function useSelectionState({ videoRef, currentProjectId, currentState, setProjectState }) {
+export function useSelectionState({ videoRef, currentProjectId, currentState, setProjectState, onSeekToTime }) {
   const selectingRef = useRef({ active: false, start: -1, mode: 'add' });
 
   useEffect(() => {
@@ -45,6 +45,10 @@ export function useSelectionState({ videoRef, currentProjectId, currentState, se
   const handleWordClick = (word) => {
     const video = videoRef.current;
     if (!video || selectingRef.current.active) return;
+    if (onSeekToTime) {
+      onSeekToTime(word.start);
+      return;
+    }
     video.currentTime = word.start;
   };
 

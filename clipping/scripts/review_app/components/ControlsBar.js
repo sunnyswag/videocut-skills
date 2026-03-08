@@ -46,11 +46,12 @@ export function ControlsBar({
 
       <video id="videoPlayer" ref=${videoRef} preload="auto" onTimeUpdate=${onTimeUpdate}></video>
 
-      <div class="help">
+      <details class="help">
+        <summary>显示操作说明</summary>
         <div><b>🖱️ 鼠标：</b>单击 = 跳转播放 | 双击 = 选中/取消 | Shift+拖动 = 批量选中/取消</div>
         <div><b>⌨️ 键盘：</b>空格 = 播放/暂停 | ← → = 跳转1秒 | Shift+←→ = 跳转5秒</div>
         <div><b>🎨 颜色：</b><span style="color:#ff9800">橙色</span> = AI预选 | <span style="color:#f44336">红色删除线</span> = 已确认删除 | 播放时自动跳过选中片段</div>
-      </div>
+      </details>
     </div>
   `;
 }
