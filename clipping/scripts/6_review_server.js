@@ -3,7 +3,7 @@
  * 审核服务器（多项目 / 多 Tab）
  *
  * 功能：
- * 1. 静态服务 review.html（脚本同目录）
+ * 1. 返回审核页 HTML 壳（加载 review_app/app.js）
  * 2. GET /api/projects — 项目列表
  * 3. GET /api/data/:id — 指定项目的 words + autoSelected
  * 4. GET /api/video/:id — 指定项目的源视频（支持 Range）
@@ -24,7 +24,7 @@ const PORT = parseInt(process.argv[2], 10) || 8899;
 const ROOT_PATH = path.resolve(process.argv[3] || path.join(process.cwd(), 'output'));
 
 const SCRIPT_DIR = __dirname;
-const REVIEW_HTML_PATH = path.join(SCRIPT_DIR, 'review.html');
+const REVIEW_HTML_PATH = path.join(SCRIPT_DIR, 'review_app', 'review.html');
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -288,8 +288,37 @@ function handleReviewHtml(req, res) {
     return;
   }
   const stat = fs.statSync(REVIEW_HTML_PATH);
-  res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': stat.size });
+  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': stat.size });
   fs.createReadStream(REVIEW_HTML_PATH).pipe(res);
+}
+
+function handleReviewAsset(req, res, m) {
+  const relativePath = decodeURIComponent(m[1] || '');
+  if (!relativePath) {
+    res.writeHead(400);
+    res.end('Bad Request');
+    return;
+  }
+
+  const assetRoot = path.join(SCRIPT_DIR, 'review_app');
+  const assetPath = path.normalize(path.join(assetRoot, relativePath));
+  if (!assetPath.startsWith(assetRoot + path.sep)) {
+    res.writeHead(400);
+    res.end('Bad Request');
+    return;
+  }
+
+  if (!fs.existsSync(assetPath) || !fs.statSync(assetPath).isFile()) {
+    res.writeHead(404);
+    res.end('Not Found');
+    return;
+  }
+
+  const ext = path.extname(assetPath).toLowerCase();
+  const mime = MIME_TYPES[ext] || 'application/octet-stream';
+  const stat = fs.statSync(assetPath);
+  res.writeHead(200, { 'Content-Type': mime, 'Content-Length': stat.size });
+  fs.createReadStream(assetPath).pipe(res);
 }
 
 const server = http.createServer((req, res) => {
@@ -310,6 +339,7 @@ const server = http.createServer((req, res) => {
     { method: 'GET', match: (p) => p.match(/^\/api\/data\/(.+)$/), handler: handleGetData },
     { method: 'GET', match: (p) => p.match(/^\/api\/video\/(.+)$/), handler: handleGetVideo },
     { method: 'POST', match: (p) => p.match(/^\/api\/cut\/(.+)$/), handler: handlePostCut },
+    { method: 'GET', match: (p) => p.match(/^\/review_app\/(.+)$/), handler: handleReviewAsset },
     { method: 'GET', match: (p) => (p === '/' || p === '/review.html') && [], handler: handleReviewHtml },
   ];
 
