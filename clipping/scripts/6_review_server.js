@@ -109,6 +109,147 @@ function flattenWords(opted) {
   return out;
 }
 
+function handleGetProjects(req, res) {
+  try {
+    const projects = getProjects();
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(projects));
+  } catch (err) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}
+
+function handleGetData(req, res, m) {
+  const projectId = decodeURIComponent(m[1]);
+  const project = getProjectById(projectId);
+  if (!project) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Project not found' }));
+    return;
+  }
+  try {
+    const commonDir = path.join(project.path, 'common');
+    const editedPath = path.join(commonDir, 'subtitles_words_edited.json');
+    const wordsPath = path.join(commonDir, 'subtitles_words.json');
+    const rawPath = fs.existsSync(editedPath) ? editedPath : wordsPath;
+    const opted = JSON.parse(fs.readFileSync(rawPath, 'utf8'));
+    const words = flattenWords(opted);
+    const autoSelected = [];
+    words.forEach((w, i) => { if (w.opt === 'del') autoSelected.push(i); });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ words, autoSelected }));
+  } catch (err) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}
+
+function handleGetVideo(req, res, m) {
+  const projectId = decodeURIComponent(m[1]);
+  const project = getProjectById(projectId);
+  if (!project) {
+    res.writeHead(404);
+    res.end('Not Found');
+    return;
+  }
+  const videoPath = findVideoFile(project);
+  if (!videoPath) {
+    res.writeHead(404);
+    res.end('Video not found');
+    return;
+  }
+  const stat = fs.statSync(videoPath);
+  if (req.headers.range) {
+    const range = req.headers.range.replace('bytes=', '').split('-');
+    const start = parseInt(range[0], 10);
+    const end = range[1] ? parseInt(range[1], 10) : stat.size - 1;
+    res.writeHead(206, {
+      'Content-Type': 'video/mp4',
+      'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+      'Accept-Ranges': 'bytes',
+      'Content-Length': end - start + 1,
+    });
+    fs.createReadStream(videoPath, { start, end }).pipe(res);
+  } else {
+    res.writeHead(200, {
+      'Content-Type': 'video/mp4',
+      'Content-Length': stat.size,
+      'Accept-Ranges': 'bytes'
+    });
+    fs.createReadStream(videoPath).pipe(res);
+  }
+}
+
+function handlePostCut(req, res, m) {
+  const projectId = decodeURIComponent(m[1]);
+  const project = getProjectById(projectId);
+  if (!project) {
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: 'Project not found' }));
+    return;
+  }
+  let body = '';
+  req.on('data', chunk => body += chunk);
+  req.on('end', () => {
+    try {
+      const deleteList = JSON.parse(body);
+      const parentDir = path.dirname(project.path);
+      const videoFiles = fs.readdirSync(parentDir).filter(f => f.endsWith('.mp4'));
+      const videoFile = videoFiles[0];
+      if (!videoFile) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'No .mp4 in project folder' }));
+        return;
+      }
+      const inputPath = path.join(parentDir, videoFile);
+      const baseName = path.basename(videoFile, '.mp4');
+      const outputFile = path.join(parentDir, `${baseName}_cut.mp4`);
+      const deletePath = path.join(project.path, 'delete_segments.json');
+      fs.writeFileSync(deletePath, JSON.stringify(deleteList, null, 2));
+      console.log(`📝 保存 ${deleteList.length} 个删除片段: ${deletePath}`);
+
+      const scriptPath = path.join(SCRIPT_DIR, '6_cut_video.sh');
+      if (fs.existsSync(scriptPath)) {
+        execSync(`bash "${scriptPath}" "${inputPath}" "${deletePath}" "${outputFile}"`, { stdio: 'inherit' });
+      } else {
+        executeFFmpegCut(inputPath, deleteList, outputFile, project.path);
+      }
+
+      const originalDuration = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 "file:${inputPath}"`).toString().trim());
+      const newDuration = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 "file:${outputFile}"`).toString().trim());
+      const deletedDuration = originalDuration - newDuration;
+      const savedPercent = ((deletedDuration / originalDuration) * 100).toFixed(1);
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        output: outputFile,
+        originalDuration: originalDuration.toFixed(2),
+        newDuration: newDuration.toFixed(2),
+        deletedDuration: deletedDuration.toFixed(2),
+        savedPercent: savedPercent,
+        message: `剪辑完成: ${outputFile}`
+      }));
+    } catch (err) {
+      console.error('❌ 剪辑失败:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+  });
+}
+
+function handleReviewHtml(req, res) {
+  if (!fs.existsSync(REVIEW_HTML_PATH)) {
+    res.writeHead(404);
+    res.end('Not Found');
+    return;
+  }
+  const stat = fs.statSync(REVIEW_HTML_PATH);
+  res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': stat.size });
+  fs.createReadStream(REVIEW_HTML_PATH).pipe(res);
+}
+
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -122,164 +263,28 @@ const server = http.createServer((req, res) => {
 
   const urlPath = req.url.split('?')[0];
 
-  // GET /api/projects
-  if (req.method === 'GET' && urlPath === '/api/projects') {
-    try {
-      const projects = getProjects();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(projects));
-    } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
+  const routes = [
+    { method: 'GET', match: (p) => p === '/api/projects' && [], handler: handleGetProjects },
+    { method: 'GET', match: (p) => p.match(/^\/api\/data\/(.+)$/), handler: handleGetData },
+    { method: 'GET', match: (p) => p.match(/^\/api\/video\/(.+)$/), handler: handleGetVideo },
+    { method: 'POST', match: (p) => p.match(/^\/api\/cut\/(.+)$/), handler: handlePostCut },
+    { method: 'GET', match: (p) => (p === '/' || p === '/review.html') && [], handler: handleReviewHtml },
+  ];
+
+  let handled = false;
+  routes.forEach((route) => {
+    if (handled) return;
+    if (req.method !== route.method) return;
+    const matchResult = route.match(urlPath);
+    if (!matchResult) return;
+    route.handler(req, res, matchResult);
+    handled = true;
+  });
+
+  if (!handled) {
+    res.writeHead(404);
+    res.end('Not Found');
   }
-
-  // GET /api/data/:id
-  const dataMatch = urlPath.match(/^\/api\/data\/(.+)$/);
-  if (req.method === 'GET' && dataMatch) {
-    const projectId = decodeURIComponent(dataMatch[1]);
-    const project = getProjectById(projectId);
-    if (!project) {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Project not found' }));
-      return;
-    }
-    try {
-      const commonDir = path.join(project.path, 'common');
-      const editedPath = path.join(commonDir, 'subtitles_words_edited.json');
-      const wordsPath = path.join(commonDir, 'subtitles_words.json');
-      const rawPath = fs.existsSync(editedPath) ? editedPath : wordsPath;
-      const opted = JSON.parse(fs.readFileSync(rawPath, 'utf8'));
-      const words = flattenWords(opted);
-
-      const autoSelected = [];
-      words.forEach((w, i) => { if (w.opt === 'del') autoSelected.push(i); });
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ words, autoSelected }));
-    } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
-  }
-
-  // GET /api/video/:id
-  const videoMatch = urlPath.match(/^\/api\/video\/(.+)$/);
-  if (req.method === 'GET' && videoMatch) {
-    const projectId = decodeURIComponent(videoMatch[1]);
-    const project = getProjectById(projectId);
-    if (!project) {
-      res.writeHead(404);
-      res.end('Not Found');
-      return;
-    }
-    const videoPath = findVideoFile(project);
-    if (!videoPath) {
-      res.writeHead(404);
-      res.end('Video not found');
-      return;
-    }
-    const stat = fs.statSync(videoPath);
-    if (req.headers.range) {
-      const range = req.headers.range.replace('bytes=', '').split('-');
-      const start = parseInt(range[0], 10);
-      const end = range[1] ? parseInt(range[1], 10) : stat.size - 1;
-      res.writeHead(206, {
-        'Content-Type': 'video/mp4',
-        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
-        'Accept-Ranges': 'bytes',
-        'Content-Length': end - start + 1,
-      });
-      fs.createReadStream(videoPath, { start, end }).pipe(res);
-    } else {
-      res.writeHead(200, {
-        'Content-Type': 'video/mp4',
-        'Content-Length': stat.size,
-        'Accept-Ranges': 'bytes'
-      });
-      fs.createReadStream(videoPath).pipe(res);
-    }
-    return;
-  }
-
-  // POST /api/cut/:id
-  const cutMatch = urlPath.match(/^\/api\/cut\/(.+)$/);
-  if (req.method === 'POST' && cutMatch) {
-    const projectId = decodeURIComponent(cutMatch[1]);
-    const project = getProjectById(projectId);
-    if (!project) {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: false, error: 'Project not found' }));
-      return;
-    }
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-      try {
-        const deleteList = JSON.parse(body);
-        const parentDir = path.dirname(project.path);
-        const videoFiles = fs.readdirSync(parentDir).filter(f => f.endsWith('.mp4'));
-        const videoFile = videoFiles[0];
-        if (!videoFile) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ success: false, error: 'No .mp4 in project folder' }));
-          return;
-        }
-        const inputPath = path.join(parentDir, videoFile);
-        const baseName = path.basename(videoFile, '.mp4');
-        const outputFile = path.join(parentDir, `${baseName}_cut.mp4`);
-        const deletePath = path.join(project.path, 'delete_segments.json');
-        fs.writeFileSync(deletePath, JSON.stringify(deleteList, null, 2));
-        console.log(`📝 保存 ${deleteList.length} 个删除片段: ${deletePath}`);
-
-        const scriptPath = path.join(SCRIPT_DIR, '6_cut_video.sh');
-        if (fs.existsSync(scriptPath)) {
-          execSync(`bash "${scriptPath}" "${inputPath}" "${deletePath}" "${outputFile}"`, { stdio: 'inherit' });
-        } else {
-          executeFFmpegCut(inputPath, deleteList, outputFile, project.path);
-        }
-
-        const originalDuration = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 "file:${inputPath}"`).toString().trim());
-        const newDuration = parseFloat(execSync(`ffprobe -v error -show_entries format=duration -of csv=p=0 "file:${outputFile}"`).toString().trim());
-        const deletedDuration = originalDuration - newDuration;
-        const savedPercent = ((deletedDuration / originalDuration) * 100).toFixed(1);
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: true,
-          output: outputFile,
-          originalDuration: originalDuration.toFixed(2),
-          newDuration: newDuration.toFixed(2),
-          deletedDuration: deletedDuration.toFixed(2),
-          savedPercent: savedPercent,
-          message: `剪辑完成: ${outputFile}`
-        }));
-      } catch (err) {
-        console.error('❌ 剪辑失败:', err.message);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, error: err.message }));
-      }
-    });
-    return;
-  }
-
-  // 静态：review.html 从脚本目录提供
-  if (urlPath === '/' || urlPath === '/review.html') {
-    if (!fs.existsSync(REVIEW_HTML_PATH)) {
-      res.writeHead(404);
-      res.end('Not Found');
-      return;
-    }
-    const stat = fs.statSync(REVIEW_HTML_PATH);
-    res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Length': stat.size });
-    fs.createReadStream(REVIEW_HTML_PATH).pipe(res);
-    return;
-  }
-
-  res.writeHead(404);
-  res.end('Not Found');
 });
 
 // 检测可用的硬件编码器
