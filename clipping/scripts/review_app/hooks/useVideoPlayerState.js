@@ -25,24 +25,6 @@ function buildSelectedRanges(words, selectedSet) {
   return ranges;
 }
 
-function findWordIndexAtTime(words, t) {
-  let lo = 0;
-  let hi = words.length - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    const w = words[mid];
-    if (!w) return -1;
-    if (t < w.start) {
-      hi = mid - 1;
-    } else if (t >= w.end) {
-      lo = mid + 1;
-    } else {
-      return mid;
-    }
-  }
-  return -1;
-}
-
 export function useVideoPlayerState({ videoRef, wordRefs, currentProjectId, currentState, stateByProject }) {
   const skipRafRef = useRef(null);
   const selectedRangesRef = useRef([]);
@@ -99,7 +81,7 @@ export function useVideoPlayerState({ videoRef, wordRefs, currentProjectId, curr
       lastTimeUiUpdateRef.current = now;
     }
 
-    const idx = findWordIndexAtTime(wordsRef.current, t);
+    const idx = wordsRef.current.findIndex((w) => t >= w.start && t < w.end);
     if (idx !== currentWordIndexRef.current) {
       currentWordIndexRef.current = idx;
       setCurrentWordIndex(idx);
