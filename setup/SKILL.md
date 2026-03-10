@@ -25,9 +25,9 @@ pos: 前置 skill，首次使用前运行
 
 | 依赖 | 用途 | 安装命令 |
 |------|------|----------|
-| Node.js | 运行脚本 | `brew install node` |
+| Node.js | 运行 CLI | `brew install node` |
 | FFmpeg | 视频剪辑 | `brew install ffmpeg` |
-| curl | API 调用 | 系统自带 |
+| @videocut/cli | 视频剪辑工具 | `npm install -g @videocut/cli` |
 
 ## API 配置
 
@@ -37,16 +37,18 @@ pos: 前置 skill，首次使用前运行
 
 1. 注册火山引擎账号
 2. 开通语音识别服务
-3. 获取 API Key
+3. 获取 App ID 和 Access Token
 
 ## 安装流程
 
 ```
 1. 安装 Node.js + FFmpeg
        ↓
-2. 配置火山引擎 API Key
+2. 安装 @videocut/cli
        ↓
-3. 验证环境
+3. 配置火山引擎 API Key
+       ↓
+4. 验证环境
 ```
 
 ## 执行步骤
@@ -62,14 +64,24 @@ node -v
 ffmpeg -version
 ```
 
-### 2. 配置 API Key
+### 2. 安装 CLI
 
 ```bash
-# 在 skills 根目录下创建 .env 文件
-echo "VOLCENGINE_API_KEY=your_key" >> .env
+npm install -g @videocut/cli
+
+# 验证
+videocut --help
 ```
 
-### 3. 验证环境
+### 3. 配置 API Key
+
+```bash
+# 设置环境变量（推荐添加到 ~/.zshrc 或 ~/.bashrc）
+export VOLCENGINE_APP_ID="your_app_id"
+export VOLCENGINE_ACCESS_TOKEN="your_access_token"
+```
+
+### 4. 验证环境
 
 ```bash
 # 检查 Node.js
@@ -78,8 +90,12 @@ node -v
 # 检查 FFmpeg
 ffmpeg -version
 
-# 检查 API Key（在 skills 根目录下执行）
-cat .env | grep VOLCENGINE
+# 检查 CLI
+videocut --help
+
+# 检查环境变量
+echo $VOLCENGINE_APP_ID
+echo $VOLCENGINE_ACCESS_TOKEN
 ```
 
 ## 常见问题
@@ -101,4 +117,12 @@ FFmpeg 命令需加 `file:` 前缀：
 
 ```bash
 ffmpeg -i "file:2026:01:26 task.mp4" ...
+```
+
+### Q4: CLI 安装失败
+
+确保 Node.js 版本 >= 18：
+
+```bash
+node -v  # 应该 >= 18.0.0
 ```
