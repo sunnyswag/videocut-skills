@@ -57,7 +57,7 @@ The AI will automatically:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Prerequisites: Install Node.js, FFmpeg, @videocut/cli  │
+│  Prerequisites: Install Node.js, FFmpeg, @huiqinghuang/videocut-cli │
 │  Set VOLCENGINE_API_KEY environment variable             │
 └─────────────────────────────────────────────────────────┘
                             ↓

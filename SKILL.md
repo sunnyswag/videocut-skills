@@ -28,7 +28,7 @@ User: Clip @some-folder
 |---|---|---|
 | Node.js | Run CLI | `brew install node` |
 | FFmpeg | Video cutting | `brew install ffmpeg` |
-| @videocut/cli | Video clipping tool | `npm install -g @videocut/cli` |
+| @huiqinghuang/videocut-cli | Video clipping tool | `npm install -g @huiqinghuang/videocut-cli` |
 
 ### Volcengine ASR API
 
@@ -45,7 +45,7 @@ Console: https://console.volcengine.com/speech/new/experience/asr?projectName=de
 brew install node ffmpeg
 
 # Install CLI
-npm install -g @videocut/cli
+npm install -g @huiqinghuang/videocut-cli
 
 # Set environment variable (recommended: add to ~/.zshrc or ~/.bashrc)
 export VOLCENGINE_API_KEY="your_api_key"
